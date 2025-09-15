@@ -4,32 +4,104 @@ rm(list = ls(all.names = TRUE))
 source("0_2_load_packages.R")
 save_location = "X:\\OxWell\\CoreTeamAnalyses\\Analyses_PleaseFirstReadSOP&ReferToDPIA\\Oxwell_2023_giacomo\\food_insecurity_2023\\r_output_enc\\"
 
+save_location = "r_output_enc"
+
 df              = readRDS(file=file.path(save_location,"sensitive_df.Rdata"))
 df_impute       = readRDS(file=file.path(save_location,"sensitive_df_impute.Rdata"))
-
 dat_imputed_long  =  readRDS(file=file.path(save_location,"sensitive_dat_imputed_long.Rdata"))
 
-# Correlations between all variables -------------------------------------------
-
-# NOT COMPLETED THIS 
-
-# dep_qs = df_impute %>%
-#   select(ends_with("_deprivation"), ends_with("foodpov"), X1020_gender) %>%
-#   mutate(across(!matches("X1020_gender"), ~ factor(., levels = c("Never", "Some", "Often")))) %>%
-#   mutate(X1020_gender = X1020_gender=="Other") %>%
-#   mutate(across(everything(), as.numeric)) %>%
-#   data.frame()
+# Associaton between each FI question and each outcome -------------------------------------------
 # 
-# # Polychoric correlations between deprivaiton and non-binary gender identity
+# df %>%
+#   select(ends_with("foodPov"), outcomes[1:6]) %>% 
+#   pivot_longer(cols=contains("foodPov"), names_to = "fi_question", values_to = "fi_response") %>% 
+#   pivot_longer(cols=ends_with("_ss"), names_to = "outcome_question", values_to = "outcome_value") %>%
+#   filter(!is.na(outcome_value)) %>%
+#   filter(!is.na(fi_response)) %>% 
+#   # filter(!is.na(scwbs_ss)) %>%
+#   mutate(fi_question = factor(fi_question, 
+#                               levels = c("X1440_foodpov", "X1470_foodpov", "X1500_foodpov"), 
+#                               labels = stringr::str_wrap(food_pov_questions,20))) %>%
+#   mutate(
+#     outcome_question = factor(outcome_question, levels = outcomes, labels = outcomes_labels)
+#   ) %>%
+#   ggplot(aes(x=fi_response, y = outcome_value)) + 
+#   # geom_violin(aes(fill = fi_response), alpha = 0.3) +
+#   see::geom_violinhalf(aes(fill = fi_response), alpha = 0.3, flip = TRUE) +
+#   geom_point(
+#     shape = 16, 
+#     size = .45,
+#     position = ggpp::position_jitternudge(x = 0.05, width = 100),
+#     alpha = 0.3
+#     # position = position_jitterdodge(dodge.width = 0.3, jitter.width = 0.1)
+#   ) +
+#   # Add mean point
+#   stat_summary(
+#     fun = mean,
+#     geom = "point",
+#     shape = 23,
+#     size = 2,
+#     fill = "red",
+#     col = "red"
+#   ) +
+#   stat_summary(
+#     fun.data = function(x){
+#       ci <- t.test(x)$conf.int
+#       return(c(y = mean(x), ymin = ci[1], ymax = ci[2]))
+#     },
+#     geom = "errorbar",
+#     width = .2,
+#     color = "red",
+#     linewidth = 1) +
+#   stat_summary(
+#     fun.data = function(x) {
+#       data.frame(
+#         y = max(x) + (max(x) - min(x)) * 0.3,
+#         # y = 10,
+#         # Use paste with collapse to create very tight spacing
+#         label = paste(
+#           sprintf("M:%.1f", mean(x)),
+#           sprintf("SD:%.1f", sd(x)),
+#           sprintf("SE:%.2f", sd(x)/sqrt(length(x))),
+#           sprintf("N:%d", length(x)),
+#           sep = "\n"
+#         )
+#       )
+#     },
+#     geom = "text",
+#     size = 2.5,
+#     lineheight = 0.8  # Reduce line spacing (default is 1.2)
+#   ) +
+#   labs(
+#     x = "Food Insecurity Level",
+#     y = "Stirling Children's Wellbeing Scale Sum-Score") +
+#   facet_grid(
+#     cols = vars(fi_question), 
+#     rows = vars(outcome_question),
+#     scales = "free_y"
+#   ) + 
+#   theme_bw() +
+#   theme(legend.position = "none")
 # 
-# sapply(1:9, function(i)
-#   polycor::polychor(x=dep_qs[,i], y=dep_qs$X1020_gender)
-#   )
+# ggsave(file.path("plots","2_2_fi_outcome_violinplots.png"), height = 13, width = 8.5, dpi = 300)
 
-# df_impute %>%
-#   select(all_of(c(predictors, outcomes))) %>% 
-#   gbtoolbox::plot_correlations(suppress_warning_message = TRUE)
+# Ethnicity by school type (state, private) and primary/secondary --------------
 
+df_impute %>% 
+  mutate(SCHOOLTYPE = df$SCHOOLTYPE[match(df_impute$RID,df$RID)]) %>%
+  group_by(SCHOOLTYPE) %>%
+  count(X1040_ethnicity) %>%
+  write.csv(file.path("results","2_2_ethnicity_by_schooltype.csv"))
+
+df_impute %>% 
+  mutate(SCHOOLTYPE = df$SCHOOLTYPE[match(df_impute$RID,df$RID)]) %>%
+  group_by(X1010_year) %>%
+  count(X1040_ethnicity) %>%
+  write.csv(file.path("results","2_2_ethnicity_by_schoolyear.csv"))
+
+# df_impute %>% 
+#   mutate(SCHOOLTYPE = df$SCHOOLTYPE[match(df_impute$RID,df$RID)]) %>%
+#   janitor::tabyl(SCHOOLTYPE, school_ID_new) 
 
 
 ## Sumscore function -----------------------------------------------------------
@@ -69,6 +141,43 @@ sumscore = function(df_input=NULL,
   
   return(scores)
 }
+
+
+# Mean Outcome Scores Across Year Groups ---------------------------------------
+
+df %>% 
+  mutate(X1010_year = as.numeric(gsub("^Y","",X1010_year))) %>%
+  select(all_of(c("X1010_year",outcomes))) %>%
+  pivot_longer(cols = outcomes) %>%
+  filter(name != "cog_ss") %>%
+  group_by(X1010_year,name) %>%
+  summarise(
+    mean = mean(value, na.rm = TRUE),
+    sd   = sd(value, na.rm = TRUE)
+  ) %>%
+  mutate(name = outcomes_labels[match(name, outcomes)]) %>%
+  mutate(name = factor(name, levels = outcomes_labels)) %>%
+  ggplot(aes(x = X1010_year, y = mean, group = name)) + 
+  geom_point() + 
+  geom_line() + 
+  geom_errorbar(aes(ymax = mean + sd, ymin = mean - sd)) +
+  scale_x_continuous(breaks = 5:13) +
+  theme(
+    # panel.background = element_rect(fill = "white", color = NA),
+    # plot.background = element_rect(fill = "white", color = NA),
+    panel.grid.minor.x = element_blank()
+    ) +
+  theme_minimal() + 
+  facet_wrap(~ name, scales = "free") + 
+  labs(
+    title = "Outcome Measures Across School Years",
+    subtitle = "Error bars represent ±1 standard deviation",
+    y = "Outcome Score",
+    x = "School Year Group"
+  ) 
+
+ggsave(file.path("plots","2_2_means_outcomes_year_group.png"), width = 9, height = 6, bg = "white")
+  
 
 
 # Correlations between food insecurity quesitons -------------------------------

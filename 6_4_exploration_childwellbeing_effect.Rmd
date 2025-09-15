@@ -1,0 +1,113 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+
+rm(list=ls())
+source("0_2_load_packages.R")
+source("0_4_custom_functions.R")
+
+df_impute  =  readRDS(file=file.path("r_output_enc","sensitive_df_impute.Rdata"))
+
+df_imputed_list  =  readRDS(file=file.path("r_output_enc","sensitive_imputed_data_list.Rdata"))
+
+
+df_impute$scwbs_ss   = df_impute %>%
+  select(ends_with("_SCWBS")) %>%
+  gbtoolbox::sum_score(input = ., print_missing_each_input_var = T, max_percent_missing_allowed = 0)
+ 
+```
+
+
+# Non-Imputed data
+
+```{r}
+library(brms)
+library(marginaleffects)
+library(cmdstanr)
+
+model1 = brm(
+  scwbs_ss ~ X1440_foodpov + X1470_foodpov +  X1500_foodpov,
+  # family = cumulative(link = "logit"),
+  data = df_impute,
+  cores = 1,
+  chains = 5,
+  backend = "rstan"
+)
+
+newdata = data.frame(
+  X1440_foodpov = c("Never","Some","Often"),
+  X1470_foodpov = c("Never","Some","Often"),
+  X1500_foodpov = c("Never","Some","Often")
+)
+
+marginaleffects::predictions(
+  model = model1,
+  newdata = newdata
+)
+
+```
+
+
+```{r}
+model2 = brm(
+  scwbs_ss ~ X1440_foodpov + X1470_foodpov +  X1500_foodpov,
+  family = cumulative(link = "logit"),
+  data = df_impute %>% mutate(scwbs_ss = ordered(scwbs_ss, levels = 15:75)),
+  cores = 5,
+  chains = 5,
+  backend = "rstan"
+)
+
+newdata = data.frame(
+  X1440_foodpov = c("Never","Some","Often"),
+  X1470_foodpov = c("Never","Some","Often"),
+  X1500_foodpov = c("Never","Some","Often")
+)
+
+marginaleffects::predictions(
+  model = model2,
+  newdata = newdata,
+  type = "link"
+  
+)
+
+
+```
+
+# Imputed data 
+
+```{r}
+library(brms)
+library(marginaleffects)
+library(cmdstanr)
+
+options(future.globals.maxSize = 4000 * 1024^2)  # Set to 4GB
+
+# plan(multisession, workers = 7)
+model1_imputed = brm_multiple(
+  scwbs_ss ~ X1440_foodpov + X1470_foodpov +  X1500_foodpov,
+  # family = cumulative(link = "logit"),
+  data = df_imputed_list,
+  # cores = 1,
+  # chains = 2,
+  backend = "rstan",
+  chains = 1
+)
+plan(sequential)
+
+newdata = data.frame(
+  X1440_foodpov = c("Never","Some","Often"),
+  X1470_foodpov = c("Never","Some","Often"),
+  X1500_foodpov = c("Never","Some","Often")
+)
+
+marginaleffects::predictions(
+  model = model1_imputed,
+  newdata = newdata
+)
+
+```

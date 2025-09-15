@@ -1,8 +1,3 @@
-
-# NOTE THAT I CHANGED THE SAVED FILE NAME FROM HERE TO :
-
-# 1_6_ordinal_results_allstudents.RDS
-
 # Pre-requisites ---------------------------------------------------------------
 
 # This is the script used on June 17th 2024 (Time taken = 4.24 days)
@@ -10,16 +5,9 @@
 rm(list=ls())
 
 source("0_2_load_packages.R")
-# library(parallel)
-# library(rstan)
-# library(tidyverse)
 
-# cmdstanr::install_cmdstan(overwrite = TRUE, dir = "C://Users//giaco//OneDrive//Work//blakemore_postdoc//Analyses//4_oxwell//food_insecurity_2023_local//", cores = 7)
-# cmdstanr::set_cmdstan_path("C://Users//giaco//.cmdstan//cmdstan-2.35.0")
-
-save_location = getwd()
-
-imputed_data_list =  readRDS(file=file.path(save_location,"sensitive_imputed_data_list.Rdata"))
+# imputed_data_list =  readRDS(file=file.path(save_location,"sensitive_imputed_data_list.Rdata"))
+imputed_data_list =  readRDS(file=file.path("r_output_enc","sensitive_imputed_data_list.Rdata"))
 
 length(imputed_data_list)
 
@@ -29,7 +17,21 @@ stan_model_pre = rstan::stan_model(file = "5_ordinal_model1_v3.stan")   # Compil
 
 fit_method_selection = "sampling"
 
+results_file_name = "1_6_ordinal_results_justsecondary_17102024.RDS"
+
 # Warning = ages/year groups and school ids do not match up to the numbers used in the stan code!
+
+## Remove Primary School Data --------------------------------------------------
+sapply(imputed_data_list, nrow) %>% table()
+# sapply(imputed_data_list2, nrow) %>% table()
+# 
+# imputed_data_list[[1]]$X1010_year %>% table()
+
+imputed_data_list <- lapply(imputed_data_list, function(df) {
+  df %>% filter(X1010_year %in% c("Y07","Y08","Y09","Y10","Y11","Y12", "Y13"))
+})
+
+sapply(imputed_data_list, nrow) %>% table()
 
 # Data analysis functions ------------------------------------------------------
 
@@ -186,7 +188,7 @@ results[["rcads_dep_ss"]] = parLapply(cl, 1:length(imputed_data_list), function(
     run_stan_model( 
     input_dat                  = imputed_data_list[[i]], 
     out                        = "rcads_dep_ss",
-    fixed_predictors           = predictors_allyears,
+    fixed_predictors           = predictors_secondary,
     transform_outcome_function = ordinalise,
     prior_only                 = FALSE,
     ppc                        = (i == 1),
@@ -196,7 +198,7 @@ results[["rcads_dep_ss"]] = parLapply(cl, 1:length(imputed_data_list), function(
 
 time_taken = c(time_taken, as.numeric(difftime(Sys.time(), start_time, units = "hours")))
 sum(time_taken)/8*100
-saveRDS(results, file = "1_6_ordinal_results.RDS")
+saveRDS(results, file = results_file_name)
 
 ## RCADS Anxiety----------------------------------------------------------------
 start_time = Sys.time()
@@ -205,7 +207,7 @@ results[["rcads_anx_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function
   run_stan_model( 
     input_dat                  = imputed_data_list[[i]], 
     out                        = "rcads_anx_ss",
-    fixed_predictors           = predictors_allyears,
+    fixed_predictors           = predictors_secondary,
     transform_outcome_function = ordinalise,
     prior_only                 = FALSE,
     ppc                        = (i == 1),
@@ -215,15 +217,15 @@ results[["rcads_anx_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function
 })
 time_taken = c(time_taken, as.numeric(difftime(Sys.time(), start_time, units = "hours")))
 print(time_taken)
-saveRDS(results, file = "1_6_ordinal_results.RDS")
+saveRDS(results, file = results_file_name)
 
 
 ## SWEMWBS ---------------------------------------------------------------------
 start_time = Sys.time()
 
 results[["swemwbs_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function(i){
-  run_stan_model( 
-    input_dat                  = imputed_data_list[[i]], 
+  run_stan_model(
+    input_dat                  = imputed_data_list[[i]],
     out                        = "swemwbs_ss",
     fixed_predictors           = predictors_secondary,
     transform_outcome_function = ordinalise,
@@ -234,7 +236,7 @@ results[["swemwbs_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function(i
 })
 time_taken = c(time_taken, as.numeric(difftime(Sys.time(), start_time, units = "hours")))
 print(time_taken)
-saveRDS(results, file = "1_6_ordinal_results.RDS")
+saveRDS(results, file = results_file_name)
 
 
 ## pt_ss ---------------------------------------------------------------------
@@ -253,8 +255,7 @@ results[["pt_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function(i){
 })
 time_taken = c(time_taken, as.numeric(difftime(Sys.time(), start_time, units = "hours")))
 print(time_taken)
-saveRDS(results, file = "1_6_ordinal_results.RDS")
-
+saveRDS(results, file = results_file_name)
 
 ## lone_ss ---------------------------------------------------------------------
 start_time = Sys.time()
@@ -272,43 +273,43 @@ results[["lone_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function(i){
 })
 time_taken = c(time_taken, as.numeric(difftime(Sys.time(), start_time, units = "hours")))
 print(time_taken)
-saveRDS(results, file = "1_6_ordinal_results.RDS")
+saveRDS(results, file = results_file_name)
 
 ## scwbs_ss ---------------------------------------------------------------------
-start_time = Sys.time()
-
-results[["scwbs_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function(i){
-  run_stan_model( 
-    input_dat                  = imputed_data_list[[i]], 
-    out                        = "scwbs_ss",
-    fixed_predictors           = predictors_primary,
-    transform_outcome_function = ordinalise,
-    prior_only                 = FALSE,
-    ppc                        = (i == 1),
-    fit_method                 = fit_method_selection
-  )
-})
-time_taken = c(time_taken, as.numeric(difftime(Sys.time(), start_time, units = "hours")))
-print(time_taken)
-saveRDS(results, file = "1_6_ordinal_results.RDS")
+# start_time = Sys.time()
+# 
+# results[["scwbs_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function(i){
+#   run_stan_model( 
+#     input_dat                  = imputed_data_list[[i]], 
+#     out                        = "scwbs_ss",
+#     fixed_predictors           = predictors_primary,
+#     transform_outcome_function = ordinalise,
+#     prior_only                 = FALSE,
+#     ppc                        = (i == 1),
+#     fit_method                 = fit_method_selection
+#   )
+# })
+# time_taken = c(time_taken, as.numeric(difftime(Sys.time(), start_time, units = "hours")))
+# print(time_taken)
+# saveRDS(results, file = "1_6_ordinal_results.RDS")
 
 ## Cognition ---------------------------------------------------------------------
-start_time = Sys.time()
-
-results[["cog_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function(i){
-  run_stan_model( 
-    input_dat                  = imputed_data_list[[i]], 
-    out                        = "cog_ss",
-    fixed_predictors           = predictors_secondary,
-    transform_outcome_function = ordinalise,
-    prior_only                 = FALSE,
-    ppc                        = (i == 1),
-    fit_method                 = fit_method_selection
-  )
-})
-time_taken = c(time_taken, as.numeric(difftime(Sys.time(), start_time, units = "hours")))
-saveRDS(results, file = "1_6_ordinal_results.RDS")
-sum(time_taken)/8*100/24
+# start_time = Sys.time()
+# 
+# results[["cog_ss"]] =  parLapply(cl, 1:length(imputed_data_list), function(i){
+#   run_stan_model( 
+#     input_dat                  = imputed_data_list[[i]], 
+#     out                        = "cog_ss",
+#     fixed_predictors           = predictors_secondary,
+#     transform_outcome_function = ordinalise,
+#     prior_only                 = FALSE,
+#     ppc                        = (i == 1),
+#     fit_method                 = fit_method_selection
+#   )
+# })
+# time_taken = c(time_taken, as.numeric(difftime(Sys.time(), start_time, units = "hours")))
+# saveRDS(results, file = "1_6_ordinal_results.RDS")
+# sum(time_taken)/8*100/24
 
 
 

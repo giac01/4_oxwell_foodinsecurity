@@ -345,7 +345,6 @@ contrast_calc_ordinal = function(input_data,
 
 # STAN functions ---------------------------------------------------------------
 
-
 analyse_stan_models = function(
     input_data, 
     input_model, 
@@ -355,13 +354,6 @@ analyse_stan_models = function(
     calc_gender       = FALSE,
     my_cdf            = plogis
 ){
-  # input_data        = dat_imputed_long
-  # input_model       = stan_ordinal_results[["rcads_dep_ss"]]
-  # fixed_predictors  = predictors_allyears
-  # conf_level        = .99
-  # outcome_vector    = 0:15
-  # my_cdf            = plogis
-
   # Combine draws across stan models on different multiply imputed datasets  
   input_model_draws = lapply(input_model, function(x) posterior::as_draws_df(x, inc_warmup = FALSE))
   
@@ -443,16 +435,31 @@ analyse_stan_models = function(
   # Calculate Estimated Marginal Means
   
   emm         = as.data.frame(matrix(nrow = nrow(fit0_draws)))
-  # Differences on the linear predictor term 
+  # Differences on the linear predictor term (which is also a kind of standardised mean difference)
   emm$smd1    = as.vector(fit0_draws_nointercept %*% as.matrix(contrast_1))
   emm$smd2    = as.vector(fit0_draws_nointercept %*% as.matrix(contrast_2))
   emm$smd3    = as.vector(fit0_draws_nointercept %*% as.matrix(contrast_3))
+  # Marginal Means 
   emm$mean1   = outcome_probabilities_always     %*% as.matrix(outcome_vector)
   emm$mean2   = outcome_probabilities_sometimes  %*% as.matrix(outcome_vector)
   emm$mean3   = outcome_probabilities_never      %*% as.matrix(outcome_vector)
+  # Marginal Mean Differences 
   emm$con1    = emm$mean2 - emm$mean3 
   emm$con2    = emm$mean1 - emm$mean3
   emm$con3    = emm$mean1 - emm$mean2
+  # Expectation of x^2
+  emm$meansquared1 = outcome_probabilities_always    %*% as.matrix(outcome_vector^2)
+  emm$meansquared2 = outcome_probabilities_sometimes %*% as.matrix(outcome_vector^2)
+  emm$meansquared3 = outcome_probabilities_never     %*% as.matrix(outcome_vector^2)
+  # SD of each prediction 
+  emm$sd1           = sqrt(emm$meansquared1 - emm$mean1^2)
+  emm$sd2           = sqrt(emm$meansquared2 - emm$mean2^2)
+  emm$sd3           = sqrt(emm$meansquared3 - emm$mean3^2)
+  # Alternative SMD of each prediction 
+  emm$alternative_smd1 = emm$con1/apply(emm[,c("sd2","sd3")],1,mean)
+  emm$alternative_smd2 = emm$con2/apply(emm[,c("sd1","sd3")],1,mean)
+  emm$alternative_smd3 = emm$con3/apply(emm[,c("sd1","sd2")],1,mean)
+  
   emm         = emm[-1]
   
   if (identical(my_cdf,plogis)){              # If logistic model, divide mean difference by standard deviation of standard logistic distribution
@@ -549,6 +556,7 @@ analyse_stan_models = function(
   
 }
 
+# OLD? (I Think not used anymore:) --------------------------------------------------------------------------
 
 analyse_stan_models_re = function(
     input_data, 
